@@ -10,7 +10,7 @@ detector = HomogeneousBgDetector()
 
 # Load Image
 
-img = cv2.imread("tutorials/media/img2.jpg")
+img = cv2.imread("./media/img1_tJtzPhV.png")
 
 
 # find the aruco markers in the image

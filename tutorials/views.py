@@ -1,10 +1,16 @@
 import datetime,jwt
+from unicodedata import category
+import json
+from django.forms import model_to_dict
+from django.conf import Settings
+from turtle import width
 from collections import OrderedDict
 
 from django.shortcuts import render
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.http.response import JsonResponse
+from prometheus_client import REGISTRY
 from rest_framework.parsers import JSONParser 
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -21,7 +27,7 @@ from  tutorials.object_detector import *
 import numpy as np
 from tutorials.forms import HotelForm
 from rest_framework.exceptions import ParseError
-from tutorials.models import Hotel, Register, Tutorial
+from tutorials.models import  Register, Tutorial, Upload
 from tutorials.serializers import TutorialSerializer,ImageSerializer,RegisterSerializer
 from rest_framework.decorators import api_view
 # import ListAPIView 
@@ -33,7 +39,7 @@ from rest_framework.decorators import api_view
 
 
 
-def get_object_size(title):
+def get_object_size(path):
     
 # Load Aruco detector
     parameters = cv2.aruco.DetectorParameters_create()
@@ -42,7 +48,7 @@ def get_object_size(title):
     detector = HomogeneousBgDetector()
 
     # Load Image
-    path="tutorials/media/"+title
+    path="tutorials"+path
     img = cv2.imread(path)
 
     # find the aruco markers in the image
@@ -97,50 +103,197 @@ def get_object_size(title):
 
 
 
-
+# to create a new user
 @api_view(['POST'])
 def user(request):
-        data = JSONParser().parse(request)
-        # print(data)
-        register_serilizer = RegisterSerializer(data=data)
-        # print(register_serilizer)
-        if register_serilizer.is_valid():
-            register_serilizer.save()
-            # print(data['username'])/
-            # token = Token.objects.create(user=data['username'])
-           
-            return JsonResponse(register_serilizer.data, status=status.HTTP_201_CREATED) 
-        else:
-            print("you entered somthing wrong")
+    if request.method == 'POST':
+        try:
+            product=Register.objects.create(
+                username=request.data['username'],
+                password=request.data['password']
+                ,email=request.data['email'],
+                phone=request.data['phone'],
+            ucode=request.data['ucode'],
+            fullname=request.data['fullname'],
+            category=request.data['category'],
+            region=request.data['region'],
+            )
+            a=RegisterSerializer(data=request.data) 
+            if a.is_valid():
+                a.save()
+            print("value of product is",product)
+        
+            a=Register.objects.all()
+            a=a.filter(id=product.id)
+            print(a[0])
+            a=RegisterSerializer(a,many=True)
+            
+            return JsonResponse(a.data, safe=False)
+        except Exception as e:
+    
+            return JsonResponse({"error": str(e)}, status=400)
+
+            print(request.data)
+            data = JSONParser().parse(request)
+            # print(data)
+            register_serilizer = RegisterSerializer(data=request.data)
+            # print(register_serilizer)
+            if register_serilizer.is_valid():
+                register_serilizer.save()
+
+                # print(data['username'])/
+                # token = Token.objects.create(user=data['username'])
+            
+                return JsonResponse(register_serilizer.data, status=status.HTTP_201_CREATED) 
+            else:
+                print("you entered somthing wrong")
 
 
 
 
+
+
+# to login user and generate a token for 15 days 
 
 @api_view(["POST"])
 @permission_classes((AllowAny,))
 def login(request):
-    username = request.data['username']
-    password = request.data['password']
-    user = Register.objects.filter(username=username,password=password).first()
-    if user is None:
+    try:
+        username = request.data['username']
+        password = request.data['password']
+        user = Register.objects.filter(username=username,password=password).first()
+        user.save()
+        if user is None:
+            raise AuthenticationFailed('User not found!')
+
+        payload = {
+            'id': user.id,
+            'fullname': user.fullname,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=21660),
+            'iat': datetime.datetime.utcnow()
+        }
+
+        token = jwt.encode(payload, 'secret', algorithm='HS256')
+
+        response = Response()
+
+        response.set_cookie(key='jwt', value=token, httponly=True)
+        response.data = {
+            'jwt': token
+        }
+        return response
+    except:
         raise AuthenticationFailed('User not found!')
 
-    payload = {
-        'id': user.id,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=0.1),
-        'iat': datetime.datetime.utcnow()
-    }
 
-    token = jwt.encode(payload, 'secret', algorithm='HS256')
 
-    response = Response()
 
-    response.set_cookie(key='jwt', value=token, httponly=True)
-    response.data = {
-        'jwt': token
-    }
-    return response
+
+
+
+
+# to upload image
+
+
+@api_view(['post'])
+def upload_docs(request):
+    
+    token=request.COOKIES.get('jwt')
+    # token="abc"
+    if not token:
+        raise AuthenticationFailed("Authentication Failed")
+    try:
+        payload=jwt.decode(token,'secret',algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationFailed("Token Expired")
+    try:
+        file = request.data['hotel_Main_Img']
+        name=request.data['name']
+        brand=request.data['brand']
+        description=request.data['description']
+        coordinate1=request.data['coordinate1']
+        coordinate2=request.data['coordinate2']
+        height=request.data['ref_object_height']
+        width=request.data['ref_object_width']
+
+    
+    except KeyError:
+       
+        raise ParseError('Request has no resource file attached')
+    try:
+        product = Upload.objects.create(name=name, hotel_Main_Img=file,brand=brand,description=description,coordinate1=coordinate1,coordinate2=coordinate2,ref_object_size_height=height,ref_object_size_width=width)
+        product.save()
+        print("value of product is",product)
+        print(product.id)
+        a=Upload.objects.all()
+        a=a.filter(id=product.id)
+        print(a)
+        a=ImageSerializer(a,many=True)
+        
+        return JsonResponse(a.data, safe=False)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+
+
+
+
+
+
+
+
+# to get size of object from image id
+
+
+@api_view(['GET'])
+def get_size(request,id):
+    # tutorials = Tutorial.objects.filter(title=title)
+    token=request.COOKIES.get('jwt')
+    if not token:
+        raise AuthenticationFailed("Authentication Failed")
+    try:
+        payload=jwt.decode(token,'secret',algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationFailed("Token Expired")
+    if request.method == 'GET': 
+        # try:
+        try:
+                a=Upload.objects.all()
+                a=a.filter(id=id)
+                a=ImageSerializer(a,many=True)
+                path=a.data[0]['hotel_Main_Img']
+                height,width=get_object_size(path)
+                print(path)
+            # tutorials_serializer = TutorialSerializer(tutorials, many=True)
+                d="height="+str(height)+" width="+str(width)
+                a=Tutorial.objects.create(
+                    name=a.data[0]['name'],
+                
+                brand=a.data[0]['brand'],
+                description=a.data[0]['description'],coordinate1=a.data[0]['coordinate1'],coordinate2=a.data[0]['coordinate2'],ref_object_size_height=a.data[0]['ref_object_size_height'],ref_object_size_width=a.data[0]['ref_object_size_width'],object_size_height=height,object_size_width=width,
+                is_verify=a.data[0]['is_verify'])
+                dict_obj=model_to_dict(a)
+                serail=json.dumps(dict_obj)
+                # a=TutorialSerializer(a,many=True)
+                return HttpResponse(serail, content_type='application/json')
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+        # except:
+            return JsonResponse({'message': 'Please Enter Correct Image Name'})
+        # return JsonResponse(tutorials_serializer.data, safe=False)
+@api_view(['GET'])
+def getall(request):
+    try:
+        a=Upload.objects.all()
+        a=ImageSerializer(a,many=True)
+        return JsonResponse(a.data, safe=False)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+
+
 @permission_classes((AllowAny,))
 @api_view(['GET', 'POST', 'DELETE'])
 def tutorial_list(request):
@@ -175,40 +328,11 @@ def tutorial_list(request):
         return JsonResponse({'message': '{} Tutorials were deleted successfully!'.format(count[0])}, status=status.HTTP_204_NO_CONTENT)
  
  
-@api_view(['post'])
-def upload_docs(request):
-    try:
-        file = request.data['hotel_Main_Img']
-        name=request.data['name']
-    
-    except KeyError:
-        raise ParseError('Request has no resource file attached')
-    product = Hotel.objects.create(name=name, hotel_Main_Img=file)
-    product.save()
-    print("value of product is",product)
-    a=Hotel.objects.all()
-    a=ImageSerializer(a,many=True)
-    
-    return JsonResponse(a.data, safe=False)
 
 
 
 
 
-
-@api_view(['GET'])
-def get_title_tutorial(request,title):
-    # tutorials = Tutorial.objects.filter(title=title)
-    if request.method == 'GET': 
-        try:
-            height,width=get_object_size(title)
-        # tutorials_serializer = TutorialSerializer(tutorials, many=True)
-            d="height="+str(height)+" width="+str(width)
-            a=[OrderedDict([('id', 6), ('title', str(title)), ('description', d)])]
-            return JsonResponse(a, safe=False)
-        except:
-            return JsonResponse({'message': 'Please Enter Correct Image Name'})
-        return JsonResponse(tutorials_serializer.data, safe=False)
 
         
  
