@@ -6,4 +6,4 @@ class HotelForm(forms.ModelForm):
 
 	class Meta:
 		model = Upload
-		fields = ['name', 'hotel_Main_Img']
+		fields = ['username', 'image']

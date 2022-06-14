@@ -27,7 +27,7 @@ from  tutorials.object_detector import *
 import numpy as np
 from tutorials.forms import HotelForm
 from rest_framework.exceptions import ParseError
-from tutorials.models import  Register, Tutorial, Upload
+from tutorials.models import  Register, response, Upload
 from tutorials.serializers import TutorialSerializer,ImageSerializer,RegisterSerializer
 from rest_framework.decorators import api_view
 # import ListAPIView 
@@ -108,29 +108,38 @@ def get_object_size(path):
 def user(request):
     if request.method == 'POST':
         try:
-            product=Register.objects.create(
+           
+            if Register.objects.filter(username=request.data['username']).exists():
+                return Response({"message":"username already exists"},status=status.HTTP_400_BAD_REQUEST)
+            
+            a=RegisterSerializer(data=request.data)
+            if a.is_valid():
+                    product=Register.objects.create(
                 username=request.data['username'],
                 password=request.data['password']
                 ,email=request.data['email'],
                 phone=request.data['phone'],
-            ucode=request.data['ucode'],
-            fullname=request.data['fullname'],
-            category=request.data['category'],
-            region=request.data['region'],
-            )
-            a=RegisterSerializer(data=request.data) 
-            if a.is_valid():
-                a.save()
-            print("value of product is",product)
-        
-            a=Register.objects.all()
-            a=a.filter(id=product.id)
-            print(a[0])
-            a=RegisterSerializer(a,many=True)
-            
-            return JsonResponse(a.data, safe=False)
+                ucode=request.data['ucode'],
+                fullname=request.data['fullname'],
+                category=request.data['category'],
+                region=request.data['region'],
+                )
+                    id1=product.id
+                    val=Register.objects.get(id=id1)
+                    val.created_by=id1
+                    val.updated_by=id1
+                    val.save()
+                    a=Register.objects.all()
+                    a=a.filter(id=product.id)
+                    print("value of a is",a)
+                    print(a[0])
+                    a=RegisterSerializer(a,many=True)
+                    return JsonResponse(a.data, safe=False)
+   
+            else:
+                print("it is not a valid detail register serializer")
+                return Response({"message":"invalid details"},status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-    
             return JsonResponse({"error": str(e)}, status=400)
 
             print(request.data)
@@ -207,23 +216,22 @@ def upload_docs(request):
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed("Token Expired")
     try:
-        file = request.data['hotel_Main_Img']
-        name=request.data['name']
+        file = request.data['image']
+        username=request.data['username']
         brand=request.data['brand']
         description=request.data['description']
         coordinate1=request.data['coordinate1']
         coordinate2=request.data['coordinate2']
         height=request.data['ref_object_height']
         width=request.data['ref_object_width']
-
     
     except KeyError:
        
-        raise ParseError('Request has no resource file attached')
+        raise ParseError('Some Fields are missing')
     try:
-        product = Upload.objects.create(name=name, hotel_Main_Img=file,brand=brand,description=description,coordinate1=coordinate1,coordinate2=coordinate2,ref_object_size_height=height,ref_object_size_width=width)
+        product = Upload.objects.create(username=username, image=file,brand=brand,description=description,coordinate1=coordinate1,coordinate2=coordinate2,ref_object_size_height=height,ref_object_size_width=width)
         product.save()
-        print("value of product is",product)
+        print("value of product is",product)   
         print(product.id)
         a=Upload.objects.all()
         a=a.filter(id=product.id)
@@ -248,7 +256,7 @@ def upload_docs(request):
 
 @api_view(['GET'])
 def get_size(request,id):
-    # tutorials = Tutorial.objects.filter(title=title)
+    # tutorials = response.objects.filter(title=title)
     token=request.COOKIES.get('jwt')
     if not token:
         raise AuthenticationFailed("Authentication Failed")
@@ -262,13 +270,13 @@ def get_size(request,id):
                 a=Upload.objects.all()
                 a=a.filter(id=id)
                 a=ImageSerializer(a,many=True)
-                path=a.data[0]['hotel_Main_Img']
+                path=a.data[0]['image']
                 height,width=get_object_size(path)
                 print(path)
             # tutorials_serializer = TutorialSerializer(tutorials, many=True)
                 d="height="+str(height)+" width="+str(width)
-                a=Tutorial.objects.create(
-                    name=a.data[0]['name'],
+                a=response.objects.create(
+                    username=a.data[0]['username'],
                 
                 brand=a.data[0]['brand'],
                 description=a.data[0]['description'],coordinate1=a.data[0]['coordinate1'],coordinate2=a.data[0]['coordinate2'],ref_object_size_height=a.data[0]['ref_object_size_height'],ref_object_size_width=a.data[0]['ref_object_size_width'],object_size_height=height,object_size_width=width,
@@ -305,7 +313,7 @@ def tutorial_list(request):
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed("Token Expired")
     if request.method == 'GET':
-        tutorials = Tutorial.objects.all()
+        tutorials = response.objects.all()
         
         title = request.query_params.get('title', None)
         if title is not None:
@@ -324,7 +332,7 @@ def tutorial_list(request):
         return JsonResponse(tutorial_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     elif request.method == 'DELETE':
-        count = Tutorial.objects.all().delete()
+        count = response.objects.all().delete()
         return JsonResponse({'message': '{} Tutorials were deleted successfully!'.format(count[0])}, status=status.HTTP_204_NO_CONTENT)
  
  
@@ -346,8 +354,8 @@ def tutorial_list(request):
 def tutorial_detail(request, pk):
     try: 
         print("geeting image with id so process your image here")
-        tutorial = Tutorial.objects.get(pk=pk) 
-    except Tutorial.DoesNotExist: 
+        tutorial = response.objects.get(pk=pk) 
+    except response.DoesNotExist: 
         return JsonResponse({'message': 'The tutorial does not exist'}, status=status.HTTP_404_NOT_FOUND) 
  
     if request.method == 'GET': 
@@ -364,7 +372,7 @@ def tutorial_detail(request, pk):
  
     elif request.method == 'DELETE': 
         tutorial.delete() 
-        return JsonResponse({'message': 'Tutorial was deleted successfully!'}, status=status.HTTP_204_NO_CONTENT)
+        return JsonResponse({'message': 'response was deleted successfully!'}, status=status.HTTP_204_NO_CONTENT)
     
 
 
@@ -372,7 +380,7 @@ def tutorial_detail(request, pk):
         
 @api_view(['GET'])
 def tutorial_list_published(request):
-    tutorials = Tutorial.objects.filter(published=True)
+    tutorials = response.objects.filter(published=True)
         
     if request.method == 'GET': 
      

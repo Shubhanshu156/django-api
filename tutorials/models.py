@@ -6,8 +6,8 @@ from django.db import models
 
 import uuid
 
-class Tutorial(models.Model):
-    name = models.CharField(max_length=50,default="")
+class response(models.Model):
+    username = models.CharField(max_length=50,default="")
     description=models.CharField(max_length=200,default="")
     brand=models.CharField(max_length=200,default="shree cement")
     coordinate1=models.CharField(max_length=200,default="")
@@ -21,8 +21,8 @@ class Tutorial(models.Model):
 
 # models.py
 class Upload(models.Model):
-    name = models.CharField(max_length=50)
-    hotel_Main_Img = models.ImageField(upload_to='media/')
+    username = models.CharField(max_length=50)
+    image = models.ImageField(upload_to='media/')
     description=models.CharField(max_length=200,default="")
     brand=models.CharField(max_length=200,default="shree cement")
     coordinate1=models.CharField(max_length=200,default="")
@@ -49,8 +49,7 @@ class Register(models.Model):
     )
     category = models.CharField(
         max_length = 20,
-        choices = cat,
-        default = '1'
+        default = 'Vendor Staff'
         )
     reg=(
         ("1","Andhra Pradesh"),
@@ -89,7 +88,9 @@ class Register(models.Model):
         ("34","West Bengal"),
 
     )
-    region=models.CharField(max_length=50,choices=reg,default="1")
+    created_by=models.CharField(max_length=50,default="")
+    updated_by=models.CharField(max_length=50,default="")
+    region=models.CharField(max_length=50,default="Rajasthan")
     email=models.CharField(max_length=50,default="shubhanshusharma2712@gmail.com")
     phone=models.CharField(max_length=10,default='1234567890')
     ucode=models.CharField(max_length=10)
